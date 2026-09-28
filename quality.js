@@ -9,7 +9,11 @@ export const reactions = [
 ];
 export function matchesReaction(m,key) {const r=reactions.find(r=>r[0]===key);return !r||r[2].test([m.title,m.caption,m.top,m.bottom,m.subject,m.category,...m.tags||[]].join(' '));}
 export function isFresh(m,now=Date.now()){const date=Date.parse(m.sourcePostDate);return Number.isFinite(date)&&date<=now&&now-date<=curation.windowDays*86400000;}
-export function qualityLabel(m,now=Date.now()){return isFresh(m,now)?(m.olderFootage?'Recent post · reused footage':'Recent post'):m.sourcePostDate?'Archive pick':'Classic · date unverified';}
+export function qualityLabel(m,now=Date.now()){
+  if(isFresh(m,now))return m.olderFootage?'Recent post · reused footage':'Recent post';
+  if(m.classic===true){const date=Date.parse(m.sourcePostDate);return Number.isFinite(date)&&date<=now?`Classic · ${new Date(date).getUTCFullYear()}`:'Classic · date unverified';}
+  return m.sourcePostDate?'Archive pick':'Classic · date unverified';
+}
 export function bestEligible(m,ratings={},now=Date.now()){return m.type!=='template'&&ratings[m.id]!==-1&&(ratings[m.id]===1||m.bestRoast===true&&(m.classic===true||isFresh(m,now)));}
 export function qualitySort(a,b,ratings={},now=Date.now()){return (ratings[b.id]||0)-(ratings[a.id]||0)||Number(isFresh(b,now))-Number(isFresh(a,now))||(a.featuredRank??9999)-(b.featuredRank??9999);}
 function mediaKey(m){const raw=m.originalSrc||m.src;if(!raw||raw.startsWith('data:')||m.top||m.bottom)return null;try{const u=new URL(raw,'https://local.invalid');u.hash='';for(const k of ['width','height','w','h','quality','q','name'])u.searchParams.delete(k);u.searchParams.sort();return u.href+'|'+String(m.caption||'').trim().toLowerCase().replace(/\s+/g,' ');}catch{return raw+'|'+String(m.caption||'').trim();}}

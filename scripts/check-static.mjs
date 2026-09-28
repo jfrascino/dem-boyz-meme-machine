@@ -74,6 +74,12 @@ assert.equal(bestEligible(recent, { recent: -1 }, now), false, 'Lame votes must 
 assert.equal(isFresh({ sourcePostDate: '2026-09-29' }, now), false, 'Future posts must not be labeled fresh');
 assert.equal(isFresh({ sourcePostDate: '2026-08-01' }, now), false, 'Old posts must age out');
 assert.ok(bestEligible({ id: 'classic', type: 'meme', bestRoast: true, classic: true }, {}, now));
-assert.match(qualityLabel({ classic: true }, now), /Classic/);
+assert.equal(qualityLabel({ classic: true }, now), 'Classic · date unverified');
+const datedClassic = { id: 'dated-classic', type: 'meme', bestRoast: true, classic: true, sourcePostDate: '2015-11-02T03:00:00Z' };
+assert.equal(qualityLabel(datedClassic, now), 'Classic · 2015', 'Verified old classics must retain their classic label');
+assert.equal(isFresh(datedClassic, now), false, 'A curated classic must not enter the fresh feed');
+assert.ok(bestEligible(datedClassic, {}, now), 'Dated classics remain eligible for Best Roasts');
+assert.equal(qualityLabel({ ...recent, classic: true }, now), 'Recent post', 'A fresh source date keeps its recent label');
+assert.equal(qualityLabel({ sourcePostDate: datedClassic.sourcePostDate }, now), 'Archive pick', 'Old uncurated posts are still archive picks');
 
 console.log(`PASS: ${modules} browser modules, ${references} local references, ${all.length} catalog items, attribution, and freshness rules.`);

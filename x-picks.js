@@ -122,8 +122,18 @@ export const xPicks = [
     "src": "./assets/x-picks/x-2100982573409132694.jpg",
     "preview": "./assets/x-picks/x-2100982573409132694.jpg",
     "curated": true,
-    "featuredRank": -97,
-    "addedAt": "2026-09-28T15:54:00Z"
+    "featuredRank": -219,
+    "addedAt": "2026-09-28T15:54:00Z",
+    "bestRoast": true,
+    "reviewedAt": "2026-09-28",
+    "olderFootage": true,
+    "contentNote": "Satirical edited image shared by Jon Machota. Original image creator and creation date are uncredited; source post date is verified.",
+    "cleanReview": "Re-reviewed the full 1095 × 1065 source image. Clear visual gag; no profanity.",
+    "momentTags": [
+      "after-a-loss",
+      "coaching",
+      "trash-talk"
+    ]
   },
   {
     "id": "x-2100757922930119115",
