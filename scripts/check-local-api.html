@@ -1,0 +1,67 @@
+<!doctype html><meta charset="utf-8"><title>Browser storage checks</title>
+<h1>Browser storage checks</h1><pre id="result">Running…</pre>
+<script type="module">
+const results = [], result = document.querySelector('#result');
+let count = 0;
+const assert = (condition, message) => { if (!condition) throw new Error(message); count++; };
+const equal = (actual, expected, message) => assert(JSON.stringify(actual) === JSON.stringify(expected), message);
+const reject = async (promise, message) => { let rejected = false; try { await promise; } catch { rejected = true; } assert(rejected, message); };
+const database = 'dem-boyz-adapter-test-' + crypto.randomUUID();
+const source = (await (await fetch('../local-api.js')).text()).replace("'dem-boyz-public-workspace'", JSON.stringify(database));
+const load = async () => { const url = URL.createObjectURL(new Blob([source], { type: 'text/javascript' })); const module = await import(url); URL.revokeObjectURL(url); return module.localApi; };
+const json = (method, body) => ({ method, body: JSON.stringify(body) });
+const gif = () => new File([Uint8Array.from([71,73,70,56,57,97,1,0,1,0,128,0,0,0,0,0,255,255,255,44,0,0,0,0,1,0,1,0,0,2,2,68,1,0,59])], 'source.gif', { type:'image/gif' });
+const jpeg = () => new File([Uint8Array.from([255,216,255,224,0,0])], 'poster.jpg', { type:'image/jpeg' });
+const projectForm = (settings, sourceFile, poster) => { const form = new FormData(); form.set('id','project-check'); form.set('kind','video'); form.set('title','Check project'); form.set('settings',JSON.stringify(settings)); if(sourceFile)form.set('source',sourceFile);if(poster)form.set('poster',poster);return form; };
+try {
+  let api = await load();
+  equal(await api('/api/library'), {tags:{},creations:[],removed:[]}, 'empty library');
+  equal(await api('/api/workspace'), {ratings:{},favorites:[],collections:[],memberships:[],projects:[]}, 'empty workspace');
+  await Promise.all([api('/api/ratings',json('PUT',{id:'one',value:1})),api('/api/favorites',json('PUT',{id:'one',favorite:true})),api('/api/tags',json('PUT',{id:'one',tagged:true})),api('/api/removals',json('PUT',{id:'two',removed:true}))]);
+  let workspace = await api('/api/workspace'), library = await api('/api/library');
+  equal(workspace.ratings,{one:1},'rating persisted'); equal(workspace.favorites,['one'],'favorite persisted'); equal(library.tags,{one:true},'tag persisted');equal(library.removed,['two'],'removal persisted');
+  await api('/api/favorites',json('PUT',{id:'one',favorite:false}));
+  await api('/api/favorites/import',json('POST',{ids:['one','two','two']}));
+  equal((await api('/api/workspace')).favorites,['two'],'favorite import preserves tombstone and deduplicates');
+  await api('/api/ratings',json('PUT',{id:'one',value:0}));await api('/api/removals',json('PUT',{id:'two',removed:false}));
+  equal((await api('/api/workspace')).ratings,{one:0},'rating reset retained');equal((await api('/api/library')).removed,[],'removal undo');
+  await api('/api/collections',json('POST',{id:'folder-check',name:' Test folder '}));
+  await api('/api/collections/folder-check/items',json('PUT',{itemId:'one',included:true}));
+  equal((await api('/api/workspace')).collections,[{id:'folder-check',name:'Test folder'}],'collection created');
+  await api('/api/collections/folder-check',json('PUT',{archived:true}));
+  equal((await api('/api/workspace')).collections,[],'folder archived');
+  await reject(api('/api/collections/folder-check/items',json('PUT',{itemId:'two',included:true})),'archived folder rejects changes');
+  await api('/api/collections/folder-check',json('PUT',{archived:false,name:'Renamed'}));
+  equal((await api('/api/workspace')).memberships,[{collectionId:'folder-check',itemId:'one'}],'folder restore preserves membership');
+  await api('/api/collections/folder-check/items',json('PUT',{itemId:'one',included:false}));
+  equal((await api('/api/workspace')).memberships,[],'membership removed');
+  await reject(api('/api/collections',json('POST',{id:'folder-check',name:'Duplicate'})),'duplicate folder rejected');
+  const creation = new FormData();for(const [key,value] of Object.entries({id:'custom-check',title:'Saved GIF',caption:'Caption',width:'1',height:'1',jerry:'true',sourceUrl:'https://tenor.com/view/test-gif-123',author:'Tester'}))creation.set(key,value);creation.set('file',gif());creation.set('poster',jpeg());
+  const created = await api('/api/creations',{method:'POST',body:creation});
+  assert(created.tagged && created.item.cloud && created.item.local,'creation returned compatibility flags');assert(created.item.src.startsWith('blob:') && created.item.poster.startsWith('blob:'),'creation returns blob URLs');equal((await (await fetch(created.item.src)).blob()).size,gif().size,'saved GIF fetchable');
+  await api('/api/removals',json('PUT',{id:'custom-check',removed:true}));
+  creation.set('title','Changed GIF');const updated = await api('/api/creations',{method:'POST',body:creation});
+  equal(updated.item.createdAt,created.item.createdAt,'creation updates preserve creation date');assert(!(await api('/api/library')).removed.includes('custom-check'),'saving restores removed creation');
+  const settings = {version:1,top:'Hello',bottom:'World',start:0,end:1,fps:0,overlays:{font:'Arial',color:'#abcdef',top:{x:.2,y:.3,start:0,end:.7},sticker:{value:'🤡',size:.15}}};
+  await api('/api/projects',{method:'POST',body:projectForm(settings,gif(),jpeg())});
+  const first = await api('/api/projects/project-check');
+  equal(first.sourceMime,'image/gif','GIF project source mime');equal(first.settings.overlays.top.x,.2,'overlay position retained');assert(first.poster.startsWith('blob:'),'project preview blob URL');
+  await api('/api/projects',{method:'POST',body:projectForm({...settings,top:'Changed'})});
+  const edited = await api('/api/projects/project-check');
+  equal(edited.sourceSrc,first.sourceSrc,'settings-only update keeps cached source URL');equal(edited.createdAt,first.createdAt,'project creation date retained');equal(edited.settings.top,'Changed','project settings updated');
+  await api('/api/projects/project-check',json('PUT',{archived:true}));assert((await api('/api/workspace')).projects[0].archived,'project archived');
+  await api('/api/projects',{method:'POST',body:projectForm({...settings,top:'Replacement'},gif())});
+  const replaced = await api('/api/projects/project-check');assert(replaced.sourceSrc!==first.sourceSrc,'source replacement creates new URL');assert(!replaced.archived,'saving restores project');
+  await reject(api('/api/projects',{method:'POST',body:projectForm({...settings,overlays:{font:'Invalid'}})}),'invalid setting rejected');
+  equal((await api('/api/projects/project-check')).settings.top,'Replacement','failed edit leaves saved project intact');
+  await reject(api('/api/ratings',json('PUT',{id:'one',value:42})),'invalid rating rejected');
+  await reject(api('/api/tags',json('PUT',{id:'../bad',tagged:true})),'invalid ID rejected');
+  const previousSrc=(await api('/api/library')).creations[0].src;
+  api = await load(); // New module instance simulates a reload without persisted object URLs.
+  const restored = (await api('/api/library')).creations[0];
+  assert(restored.src!==previousSrc,'new page rebuilds blob URL');equal((await(await fetch(restored.src)).blob()).size,gif().size,'restored GIF bytes available');equal((await api('/api/workspace')).favorites,['two'],'favorites survive new instance');
+  equal((await api('/api/projects/project-check')).settings.top,'Replacement','project survives new instance');
+  result.textContent=`PASS — ${count} checks: browser persistence, concurrent updates, tombstones, collections and Undo, media bytes, project source updates, validation and recreated Blob URLs.`;
+  document.title=`PASS ${count} storage checks`;
+} catch(error) { result.textContent=`FAIL after ${count} checks\n${error.stack}`;document.title='FAIL storage checks'; }
+</script>

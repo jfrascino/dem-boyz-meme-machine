@@ -1,0 +1,57 @@
+{
+  "retrieved": "2026-09-28",
+  "license": "MIT",
+  "packages": {
+    "gifuct-js": "2.1.2",
+    "js-binary-schema-parser": "2.0.3"
+  },
+  "modifications": [
+    "Replaced three jsDelivr absolute imports with relative local filenames.",
+    "Removed sourcemap URLs (maps are not vendored).",
+    "Added license/provenance header; no decoder logic changed."
+  ],
+  "files": [
+    {
+      "file": "gifuct-js-2.1.2.mjs",
+      "source": "https://cdn.jsdelivr.net/npm/gifuct-js@2.1.2/+esm",
+      "sourceSha256": "4356b64f05bc7548b23b950455e3e4486b2ba5ea6f47477106f4ba24006a56df",
+      "sha256": "56fc5b8b495de1f6dc711de505af3566e4a0e0679fdda0fe24024e7e1ed3bc40",
+      "bytes": 3263
+    },
+    {
+      "file": "gif-schema-2.0.3.mjs",
+      "source": "https://cdn.jsdelivr.net/npm/js-binary-schema-parser@2.0.3/lib/schemas/gif/+esm",
+      "sourceSha256": "d27423eb0fae811daf080485a605df222bf78c607fce7be4110256ca9278a120",
+      "sha256": "075a27cd1d249bfdc6ef3520b12dff1ca69908d7dc6983f70bc8ae40ce5cb3ed",
+      "bytes": 5147
+    },
+    {
+      "file": "binary-parser-2.0.3.mjs",
+      "source": "https://cdn.jsdelivr.net/npm/js-binary-schema-parser@2.0.3/+esm",
+      "sourceSha256": "26df593c5a4bfbaed0a8b41e6d05bd906fde1c48d609560d4b39b51c9b6e13df",
+      "sha256": "758a9b7970f0bc3228d051d5822ed9c04248b53102f9110b9f5aac75406f73c7",
+      "bytes": 1271
+    },
+    {
+      "file": "uint8-parser-2.0.3.mjs",
+      "source": "https://cdn.jsdelivr.net/npm/js-binary-schema-parser@2.0.3/lib/parsers/uint8/+esm",
+      "sourceSha256": "45d1f438224aa38fded2f72e5fa01ce5c42e1154287755ec6711434674ef40f4",
+      "sha256": "7cfbadc8b35ccd213c19e0a14328641b3f694ceab89b62b33e2bb332daf66791",
+      "bytes": 2121
+    },
+    {
+      "file": "LICENSE.gifuct-js",
+      "source": "https://cdn.jsdelivr.net/npm/gifuct-js@2.1.2/LICENSE",
+      "sourceSha256": "8633cda68d7b47e98e3e563a2833e63792edeecdb24cab02bfb15f25c1b37072",
+      "sha256": "8633cda68d7b47e98e3e563a2833e63792edeecdb24cab02bfb15f25c1b37072",
+      "bytes": 1098
+    },
+    {
+      "file": "LICENSE.js-binary-schema-parser",
+      "source": "https://cdn.jsdelivr.net/npm/js-binary-schema-parser@2.0.3/LICENSE",
+      "sourceSha256": "8633cda68d7b47e98e3e563a2833e63792edeecdb24cab02bfb15f25c1b37072",
+      "sha256": "8633cda68d7b47e98e3e563a2833e63792edeecdb24cab02bfb15f25c1b37072",
+      "bytes": 1098
+    }
+  ]
+}

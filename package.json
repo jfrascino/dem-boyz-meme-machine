@@ -1,0 +1,14 @@
+{
+  "name": "dem-boyz-meme-machine",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A public Cowboys meme library and browser-based meme, GIF, and video editor.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node scripts/check-static.mjs && node scripts/check-video-editing.mjs && node --test scripts/overlay-render.test.js && node scripts/check-x-public.mjs",
+    "check:static": "node scripts/check-static.mjs"
+  }
+}
