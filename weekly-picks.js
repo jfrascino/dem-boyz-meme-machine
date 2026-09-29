@@ -1,6 +1,53 @@
 // Reviewed selections. See docs/weekly-curation.md.
 export const weeklyPicks = [
   {
+    "id": "reddit-1wsml5e",
+    "title": "Garrett would have clapped",
+    "caption": "The only difference? Jason Garrett would have clapped after that loss.",
+    "subject": "Dallas Cowboys",
+    "category": "Game day",
+    "tags": [
+      "Brian Schottenheimer",
+      "Jason Garrett",
+      "coaching",
+      "same coach",
+      "Spider-Man",
+      "Peter Parker",
+      "clapping",
+      "Cowboys"
+    ],
+    "sourceUrl": "https://www.reddit.com/r/dallascowboys/comments/1wsml5e/the_only_difference_is/",
+    "author": "u/keepthatsameenergy1",
+    "credit": "Posted by u/keepthatsameenergy1 in r/dallascowboys; original visual creator not independently established",
+    "sourcePostDate": "2026-09-28T18:27:11.049Z",
+    "classic": false,
+    "olderFootage": true,
+    "originalSrc": "https://i.redd.it/up2355vi0bsh1.png",
+    "width": 700,
+    "height": 680,
+    "sha256": "55731824ec84291e558e70a2ff452adc50b9b682cff357a9477050d6a6674ded",
+    "reviewedAt": "2026-09-29",
+    "qualityReason": "Sharp four-panel Peter Parker glasses meme equates Schottenheimer with Garrett. Familiar template makes the replacement-coach/same-result punchline immediate; post caption adds the clap punchline. Specific current Dallas coaching frustration, clean and readable.",
+    "contentNote": "Fresh September 28, 2026 post using older film and coach photographs. Satirical coach comparison; not a photo from the current game. Schottenheimer picture is from his Seattle period. Pair image with source-derived caption to preserve the clap punchline.",
+    "type": "meme",
+    "origin": "community",
+    "sourceName": "Reddit",
+    "dateVerification": "Canonical Reddit post DOM shreddit-post created-timestamp=2026-09-28T18:27:11.049000+0000; author=keepthatsameenergy1; id=t3_1wsml5e. Browser showed 20h ago on 2026-09-29, consistent with web search Sept28 date.",
+    "cleanReview": "Full downloaded 700×680 original inspected; clean, legible faces, no slurs/profanity/politics/sexual or death jokes. No audio.",
+    "src": "./assets/weekly-picks/reddit-1wsml5e.png",
+    "preview": "./assets/weekly-picks/reddit-1wsml5e.png",
+    "momentTags": [
+      "after-a-loss",
+      "coaching",
+      "blame-game"
+    ],
+    "qualityScore": 92,
+    "curated": true,
+    "bestRoast": true,
+    "featuredRank": -270,
+    "addedAt": "2026-09-29T14:11:25.245Z"
+  },
+  {
     "id": "x-2104358457411310063",
     "sourcePostDate": "2026-09-27T23:52:07Z",
     "sourceUrl": "https://x.com/elijah__116/status/2104358457411310063",

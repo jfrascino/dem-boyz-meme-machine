@@ -1,5 +1,5 @@
 // Editorial selection is explicit; recency uses original post dates, never import time.
-export const curation = { reviewedAt: '2026-09-28', cadence: 'Tuesdays · 10 a.m. ET', windowDays: 30 };
+export const curation = { reviewedAt: '2026-09-29', cadence: 'Tuesdays · 10 a.m. ET', windowDays: 30 };
 export const reactions = [
   ['interception','Interception',/intercept|pick six|pick-six|turnover/i],
   ['missed-kick','Missed kick',/missed kick|kicker|field goal|extra point|maher/i],
