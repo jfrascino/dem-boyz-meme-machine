@@ -1,6 +1,7 @@
 // Public, credential-free X imports for the static site. Only the post API and
-// validated video.twimg.com MP4s are fetched; this is not an arbitrary URL proxy.
+// validated Twitter media are fetched; this is not an arbitrary URL proxy.
 const MEDIA_LIMIT = 20 * 1024 * 1024;
+const IMAGE_LIMIT = 15 * 1024 * 1024;
 const JSON_LIMIT = 1024 * 1024;
 const CACHE_LIMIT = 64;
 const CACHE_TTL = 5 * 60 * 1000;
@@ -38,10 +39,28 @@ function mediaURL(value) {
   return null;
 }
 
+function imageURL(value) {
+  if (typeof value !== 'string' || value.length > 4096) return null;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:' || url.hostname !== 'pbs.twimg.com' || url.port || url.username || url.password) return null;
+    // Photos use either /media/id.jpg?name=orig or /media/id?format=jpg&name=orig.
+    if (!/^\/media\/[A-Za-z0-9_-]+(?:\.(?:jpe?g|png|webp))?$/i.test(url.pathname)) return null;
+    const format = url.searchParams.get('format');
+    if (format && !/^(?:jpe?g|png|webp)$/i.test(format)) return null;
+    if (!/\.(?:jpe?g|png|webp)$/i.test(url.pathname) && !format) return null;
+    return url.href;
+  } catch {}
+  return null;
+}
+
+const limitMessage = limit => limit === MEDIA_LIMIT ? 'This video exceeds 20 MB. Download it and use Upload from device to trim it locally.' :
+  limit === IMAGE_LIMIT ? 'This image exceeds 15 MB. Choose a smaller image or another post.' : 'This post returned too much data. Try another public post.';
+
 async function limitedBlob(response, limit, signal) {
   if (Number(response.headers.get('content-length')) > limit) {
     await response.body?.cancel();
-    throw new ImportError(limit === MEDIA_LIMIT ? 'This video exceeds 20 MB. Download it and use Import video to trim it locally.' : 'This post returned too much data. Try another public post.', 413);
+    throw new ImportError(limitMessage(limit), 413);
   }
   const reader = response.body?.getReader();
   if (!reader) throw new ImportError('The source returned an empty response. Try again or import a video file.', 502);
@@ -58,29 +77,29 @@ async function limitedBlob(response, limit, signal) {
       size += value.byteLength;
       if (size > limit) {
         await reader.cancel();
-        throw new ImportError(limit === MEDIA_LIMIT ? 'This video exceeds 20 MB. Download it and use Import video to trim it locally.' : 'This post returned too much data. Try another public post.', 413);
+        throw new ImportError(limitMessage(limit), 413);
       }
       chunks.push(value);
     }
-    return new Blob(chunks);
+    return new Blob(chunks, { type: (response.headers.get('content-type') || '').split(';')[0].trim().toLowerCase() });
   } finally {
     signal.removeEventListener('abort', abort);
     reader.releaseLock();
   }
 }
 
-async function download(url, { signal, video = false }) {
+async function download(url, { signal, video = false, photo = false }) {
   checkAbort(signal);
   const controller = new AbortController();
   let timedOut = false;
   const abort = () => controller.abort();
   signal?.addEventListener('abort', abort, { once: true });
-  const timer = setTimeout(() => { timedOut = true; controller.abort(); }, video ? 30000 : 12000);
+  const timer = setTimeout(() => { timedOut = true; controller.abort(); }, video || photo ? 30000 : 12000);
   try {
     checkAbort(signal);
     const response = await fetch(url, {
       method: 'GET', mode: 'cors', credentials: 'omit', redirect: 'error',
-      referrerPolicy: 'no-referrer', headers: { Accept: video ? 'video/mp4' : 'application/json' },
+      referrerPolicy: 'no-referrer', headers: { Accept: photo ? 'image/jpeg,image/png,image/webp' : video ? 'video/mp4' : 'application/json' },
       signal: controller.signal
     });
     if (!response.ok) {
@@ -93,12 +112,16 @@ async function download(url, { signal, video = false }) {
       await response.body?.cancel();
       throw new ImportError('This post did not return a supported MP4 video.', 422);
     }
-    return await limitedBlob(response, video ? MEDIA_LIMIT : JSON_LIMIT, controller.signal);
+    if (photo && !['image/jpeg', 'image/png', 'image/webp', 'application/octet-stream'].includes((response.headers.get('content-type') || '').split(';')[0].trim().toLowerCase())) {
+      await response.body?.cancel();
+      throw new ImportError('This post did not return a supported JPG, PNG, or WebP image.', 422);
+    }
+    return await limitedBlob(response, photo ? IMAGE_LIMIT : video ? MEDIA_LIMIT : JSON_LIMIT, controller.signal);
   } catch (error) {
     checkAbort(signal);
     if (timedOut) throw new ImportError('The X import timed out. Try again or import a video file.', 504);
     if (error instanceof ImportError) throw error;
-    throw new ImportError('The browser could not reach X media. Try again, or download the clip and use Import video.', 502);
+    throw new ImportError('The browser could not reach X media. Try again, or download the clip and use Upload from device.', 502);
   } finally {
     clearTimeout(timer);
     signal?.removeEventListener('abort', abort);
@@ -122,10 +145,16 @@ async function resolvePost(post, signal) {
   if (data?.code === 429) throw new ImportError('X media lookup is busy. Try again shortly, or import a video file.', 429);
   if (!data || data.code && data.code !== 200 || !data.status || String(data.status.id) !== post.id) throw new ImportError('This post could not be loaded. Try again or import a video file.', 502);
   const tweet = data.status;
-  const candidates = Array.isArray(tweet.media?.videos) ? tweet.media.videos :
-    (Array.isArray(tweet.media?.all) ? tweet.media.all : []).filter(m => m && ['video', 'gif'].includes(m.type));
-  const media = candidates.slice(0, 4).flatMap(m => {
+  // `all` retains the order of mixed photo/video posts. The typed arrays are a
+  // fallback for older API responses, not an additional source of duplicates.
+  const candidates = Array.isArray(tweet.media?.all) && tweet.media.all.length ? tweet.media.all :
+    [...(Array.isArray(tweet.media?.videos) ? tweet.media.videos : []), ...(Array.isArray(tweet.media?.photos) ? tweet.media.photos : [])];
+  const media = candidates.filter(m => m && ['photo', 'video', 'gif'].includes(m.type)).slice(0, 4).flatMap(m => {
     if (!m || typeof m !== 'object') return [];
+    if (m.type === 'photo') {
+      const src = imageURL(m.url);
+      return src ? [{ src, kind: 'photo', width: dimension(m.width), height: dimension(m.height), duration: 0 }] : [];
+    }
     const variants = (Array.isArray(m.formats) ? m.formats : [])
       .filter(v => v && mediaURL(v.url) && (!v.codec || v.codec === 'h264'))
       .sort((a, b) => (Number(a.bitrate) || 0) - (Number(b.bitrate) || 0));
@@ -133,7 +162,7 @@ async function resolvePost(post, signal) {
     const src = mediaURL(reasonable.at(-1)?.url || variants[0]?.url || m.url);
     return src ? [{ src, kind: m.type === 'gif' ? 'gif' : 'video', width: dimension(m.width), height: dimension(m.height), duration: duration(m.duration) }] : [];
   });
-  if (!media.length) throw new ImportError('No downloadable video or animated GIF was found. Try the original post containing the media.', 422);
+  if (!media.length) throw new ImportError('No downloadable photo, video, or animated GIF was found. Try the original post containing the media.', 422);
   const resolved = { id: post.id, url: post.url, text: String(tweet.text || '').slice(0, 500), author: String(tweet.author?.screen_name || '').slice(0, 100), media };
   if (postCache.size >= CACHE_LIMIT) postCache.delete(postCache.keys().next().value);
   postCache.set(post.id, { post: resolved, expires: Date.now() + CACHE_TTL });
@@ -147,13 +176,22 @@ export async function requestX(path, body, signal) {
     if (!['/api/import/x', '/api/import/x/media'].includes(path)) throw new ImportError('Import route not found.', 404);
     if (!body || typeof body !== 'object' || Array.isArray(body)) throw new ImportError('Paste a public X or Twitter post link.');
     const post = parsePost(body.url);
-    if (path.endsWith('/media') && (!Number.isInteger(body.index) || body.index < 0 || body.index > 3)) throw new ImportError('Choose a video from this post.');
+    if (path.endsWith('/media') && (!Number.isInteger(body.index) || body.index < 0 || body.index > 3)) throw new ImportError('Choose media from this post.');
     const resolved = await resolvePost(post, signal);
     if (path === '/api/import/x') return json({ ...resolved, media: resolved.media.map(({ src, ...m }, index) => ({ ...m, index })) });
-    if (!resolved.media[body.index]) throw new ImportError('Choose a video from this post.');
-    const blob = await download(resolved.media[body.index].src, { signal, video: true });
+    const media = resolved.media[body.index];
+    if (!media) throw new ImportError('Choose media from this post.');
+    const photo = media.kind === 'photo';
+    const blob = await download(media.src, { signal, video: !photo, photo });
     const signature = new Uint8Array(await blob.slice(0, 12).arrayBuffer());
     checkAbort(signal);
+    if (photo) {
+      const mime = signature[0] === 255 && signature[1] === 216 && signature[2] === 255 ? 'image/jpeg' :
+        signature.length >= 8 && [137, 80, 78, 71, 13, 10, 26, 10].every((byte, i) => signature[i] === byte) ? 'image/png' :
+        signature.length === 12 && String.fromCharCode(...signature.slice(0, 4)) === 'RIFF' && String.fromCharCode(...signature.slice(8, 12)) === 'WEBP' ? 'image/webp' : null;
+      if (!mime || blob.type !== 'application/octet-stream' && blob.type !== mime) throw new ImportError('The source did not return a valid JPG, PNG, or WebP image.', 422);
+      return new Response(blob, { headers: { 'Content-Type': mime, 'Content-Length': String(blob.size), 'Cache-Control': 'no-store' } });
+    }
     if (signature.length < 12 || String.fromCharCode(...signature.slice(4, 8)) !== 'ftyp') throw new ImportError('The source did not return a valid MP4 video.', 422);
     return new Response(blob, { headers: { 'Content-Type': 'video/mp4', 'Content-Length': String(blob.size), 'Cache-Control': 'no-store' } });
   } catch (error) {

@@ -96,7 +96,7 @@ function sourceAttribution(value) {
   if (typeof value !== 'string' || value.length > 2048) invalid('Invalid source link.');
   let url; try { url = new URL(value); } catch { invalid('Invalid source link.'); }
   const host = url.hostname.replace(/^www\./, '');
-  if (url.protocol !== 'https:' || url.username || url.password || url.port || !['x.com', 'twitter.com', 'pinterest.com', 'imgflip.com', 'lolalambchops.com', 'thunderdungeon.com', 'athlonsports.com', 'dallasnews.com', 'tenor.com', 'giphy.com'].includes(host)) invalid('Use an original source link from a supported meme library.');
+  if (url.protocol !== 'https:' || url.username || url.password || url.port || !['x.com', 'twitter.com', 'pinterest.com', 'imgflip.com', 'lolalambchops.com', 'thunderdungeon.com', 'athlonsports.com', 'dallasnews.com', 'tenor.com', 'giphy.com', 'reddit.com', 'chron.com', 'digitalmomblog.com', 'ebaumsworld.com'].includes(host)) invalid('Use an original source link from a supported meme library.');
   if (['x.com', 'twitter.com'].includes(host)) {
     const match = url.pathname.match(/^\/([a-zA-Z0-9_]{1,15})\/status\/(\d{1,25})(?:\/.*)?$/);
     if (!match) invalid('Use a public X post link.');
@@ -109,7 +109,7 @@ function projectSettings(kind, input) {
   const number = (value, min, max, fallback) => { if (value === undefined) return fallback; if (typeof value !== 'number' || !Number.isFinite(value) || value < min || value > max) invalid('Invalid project setting.'); return value; };
   const choice = (value, options, fallback) => { if (value === undefined) return fallback; if (!options.includes(value)) invalid('Invalid project setting.'); return value; };
   const settings = { version: 1, top: text(input.top, 120), bottom: text(input.bottom, 120), jerry: input.jerry === true };
-  if (kind === 'image') return { ...settings, size: number(input.size, 4, 11, 7), color: /^#[0-9a-f]{6}$/i.test(input.color) ? input.color : '#ffffff', layout: choice(input.layout, ['classic', 'banner'], 'classic'), shape: choice(input.shape, ['original', 'square', 'story', 'wide'], 'original') };
+  if (kind === 'image') return { ...settings, sourceUrl: input.sourceUrl ? sourceAttribution(input.sourceUrl) : '', author: text(input.author || '', 100), sourceTitle: text(input.sourceTitle || '', 100), size: number(input.size, 4, 11, 7), color: /^#[0-9a-f]{6}$/i.test(input.color) ? input.color : '#ffffff', layout: choice(input.layout, ['classic', 'banner'], 'classic'), shape: choice(input.shape, ['original', 'square', 'story', 'wide'], 'original') };
   let overlays;
   if (input.overlays !== undefined) {
     const raw = input.overlays;

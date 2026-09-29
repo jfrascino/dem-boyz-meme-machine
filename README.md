@@ -15,7 +15,7 @@ The app is static HTML, CSS, and JavaScript. Browsing and editing do not require
 - Video and animated GIF uploads with loop preview, start/end trim handles, cropping, speed, reverse, and ping-pong playback.
 - Draggable captions, timing, font/color controls, stickers, and chat, X, and Story export presets.
 - Editable projects saved in the browser.
-- Paste a public X/Twitter post to import supported media through FxTwitter’s browser-accessible service.
+- Paste a public X/Twitter post link directly in Video studio or from Make a meme. Videos, animated GIFs, and photos import through FxTwitter’s browser-accessible service; a single attachment opens in its editor automatically. Multiple attachments can be previewed, edited, or saved individually or in a batch.
 
 ## Your data stays in this browser
 

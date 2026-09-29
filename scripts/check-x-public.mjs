@@ -10,9 +10,17 @@ const fresh = () => String(nextId++);
 const link = id => `https://x.com/example/status/${id}`;
 const api = id => `https://api.fxtwitter.com/2/status/${id}`;
 const mediaURL = 'https://video.twimg.com/test/clip.mp4?tag=1';
+const photoURL = 'https://pbs.twimg.com/media/example_photo.jpg?name=orig';
+const photo = (url = photoURL) => ({ type: 'photo', url, width: 1200, height: 800 });
 const fixture = (id, extra = {}) => ({ code: 200, status: { id, text: 'Cowboys reaction', author: { screen_name: 'example' }, media: { videos: [{ type: 'video', url: mediaURL, width: 1280, height: 720, duration: 4, ...extra }] } } });
 const response = (id, extra) => Response.json(fixture(id, extra));
 const mp4 = () => new Response(new Uint8Array([0, 0, 0, 16, 102, 116, 121, 112, 109, 112, 52, 50, 0, 0, 0, 0]), { headers: { 'Content-Type': 'video/mp4' } });
+const imageBytes = {
+  'image/jpeg': new Uint8Array([255, 216, 255, 224, 0, 16, 74, 70, 73, 70, 0, 1]),
+  'image/png': new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13]),
+  'image/webp': new Uint8Array([82, 73, 70, 70, 16, 0, 0, 0, 87, 69, 66, 80])
+};
+const photoResponse = (id, photos = [photo()]) => Response.json({ ...fixture(id), status: { ...fixture(id).status, media: { photos } } });
 const equal = (actual, expected) => { assert.deepEqual(actual, expected); assertions++; };
 const ok = value => { assert.ok(value); assertions++; };
 const status = async (result, expected, message) => { equal(result.status, expected); const data = await result.json(); ok(data.error.includes(message)); };
@@ -50,6 +58,97 @@ try {
   for (const { options } of requests) {
     equal(options.method, 'GET'); equal(options.credentials, 'omit'); equal(options.mode, 'cors'); equal(options.redirect, 'error');
     equal(Object.keys(options.headers), ['Accept']); equal(options.referrerPolicy, 'no-referrer');
+  }
+
+  // Mixed posts use `all` ordering, without duplicating the typed arrays.
+  {
+    const id = fresh(), video = fixture(id).status.media.videos[0];
+    const all = [photo(), { ...video, type: 'gif' }, photo('https://pbs.twimg.com/media/second?format=png&name=orig'), video];
+    const mixed = fixture(id); mixed.status.media = { all, photos: [all[0], all[2]], videos: [all[1], all[3]] };
+    const fetched = [];
+    globalThis.fetch = async (url, options) => {
+      fetched.push(url);
+      if (url === api(id)) return Response.json(mixed);
+      if (url === photoURL) {
+        equal(options.mode, 'cors'); equal(options.credentials, 'omit'); equal(options.redirect, 'error');
+        return new Response(imageBytes['image/jpeg'], { headers: { 'Content-Type': 'image/jpeg' } });
+      }
+      if (url.endsWith('format=png&name=orig')) return new Response(imageBytes['image/png'], { headers: { 'Content-Type': 'application/octet-stream' } });
+      equal(url, mediaURL); return mp4();
+    };
+    const mixedPost = await (await requestX('/api/import/x', { url: link(id) })).json();
+    equal(mixedPost.media.map(m => [m.kind, m.index]), [['photo', 0], ['gif', 1], ['photo', 2], ['video', 3]]);
+    equal(mixedPost.media[0], { kind: 'photo', width: 1200, height: 800, duration: 0, index: 0 });
+    for (const [index, mime] of [[0, 'image/jpeg'], [1, 'video/mp4'], [2, 'image/png'], [3, 'video/mp4']]) {
+      const media = await requestX('/api/import/x/media', { url: link(id), index });
+      equal(media.status, 200); equal(media.headers.get('content-type'), mime); equal((await media.blob()).type, mime);
+    }
+    equal(fetched.length, 5);
+  }
+
+  // Photos-only and legacy typed-array responses support all allowed image formats.
+  for (const [url, mime] of [
+    [photoURL, 'image/jpeg'],
+    ['https://pbs.twimg.com/media/example_photo?format=png&name=orig', 'image/png'],
+    ['https://pbs.twimg.com/media/example_photo.webp', 'image/webp']
+  ]) {
+    const id = fresh();
+    globalThis.fetch = async address => address === api(id) ? photoResponse(id, [photo(url)]) : new Response(imageBytes[mime], { headers: { 'Content-Type': mime } });
+    const metadata = await (await requestX('/api/import/x', { url: `https://twitter.com/example/status/${id}/photo/1?s=20` })).json();
+    equal(metadata.media.length, 1); equal(metadata.media[0].kind, 'photo'); equal(metadata.author, 'example');
+    const image = await requestX('/api/import/x/media', { url: link(id), index: 0 });
+    equal(image.status, 200); equal(image.headers.get('content-type'), mime); equal(image.headers.get('content-length'), '12');
+  }
+
+  // An empty `all` must not hide usable media from an older typed-array response.
+  {
+    const id = fresh(), data = fixture(id); data.status.media.all = []; data.status.media.photos = [photo()];
+    globalThis.fetch = async () => Response.json(data);
+    const result = await (await requestX('/api/import/x', { url: link(id) })).json();
+    equal(result.media.map(m => m.kind), ['video', 'photo']);
+  }
+
+  // Only original Twitter raster photos can trigger an image request.
+  for (const url of [
+    'https://pbs.twimg.com.evil.test/media/id.jpg', 'https://evil.test/media/id.jpg',
+    'http://pbs.twimg.com/media/id.jpg', 'https://user:pass@pbs.twimg.com/media/id.jpg',
+    'https://pbs.twimg.com:444/media/id.jpg', 'https://pbs.twimg.com/profile_images/id.jpg',
+    'https://pbs.twimg.com/media/id.svg', 'https://pbs.twimg.com/media/id?format=svg',
+    'https://pbs.twimg.com/media/id.jpg?format=svg', 'https://pbs.twimg.com/media/id',
+    'https://pbs.twimg.com/media/../id.jpg', 'https://pbs.twimg.com/media/id.jpg/extra'
+  ]) {
+    const id = fresh(); let requests = 0;
+    globalThis.fetch = async () => { requests++; return photoResponse(id, [photo(url)]); };
+    await status(await requestX('/api/import/x/media', { url: link(id), index: 0 }), 422, 'No downloadable');
+    equal(requests, 1);
+  }
+
+  // Reject HTML/SVG, mislabeled bytes, and excessive images before handing them to a decoder.
+  for (const [type, bytes] of [
+    ['text/html', new TextEncoder().encode('<html>not an image</html>')],
+    ['image/svg+xml', new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg"/>')],
+    ['image/jpeg', new TextEncoder().encode('not an image')],
+    ['image/jpeg', imageBytes['image/png']],
+    ['application/octet-stream', new TextEncoder().encode('not an image')]
+  ]) {
+    const id = fresh(); globalThis.fetch = async url => url === api(id) ? photoResponse(id) : new Response(bytes, { headers: { 'Content-Type': type } });
+    equal((await requestX('/api/import/x/media', { url: link(id), index: 0 })).status, 422);
+  }
+  for (const declared of [true, false]) {
+    const id = fresh();
+    globalThis.fetch = async url => url === api(id) ? photoResponse(id) : new Response(new Uint8Array(declared ? 12 : 15 * 1024 * 1024 + 1), { headers: { 'Content-Type': 'image/jpeg', ...(declared ? { 'Content-Length': String(16 * 1024 * 1024) } : {}) } });
+    await status(await requestX('/api/import/x/media', { url: link(id), index: 0 }), 413, 'exceeds 15 MB');
+  }
+
+  // Cancelling a photo body does not return a partial image or a generic failure.
+  {
+    const id = fresh(), controller = new AbortController();
+    globalThis.fetch = async url => {
+      if (url === api(id)) return photoResponse(id);
+      queueMicrotask(() => controller.abort());
+      return new Response(new ReadableStream({ start() {} }), { headers: { 'Content-Type': 'image/jpeg' } });
+    };
+    await assert.rejects(requestX('/api/import/x/media', { url: link(id), index: 0 }, controller.signal), { name: 'AbortError' }); assertions++;
   }
 
   // Reject mismatched/malformed metadata and unsafe resolved media.
